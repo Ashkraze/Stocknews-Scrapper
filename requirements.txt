@@ -1,0 +1,6 @@
+trafilatura
+transformers
+requests
+beautifulsoup4
+pandas
+openpyxl
