@@ -40,11 +40,11 @@ def main():
             source_tag = cols[1].find("span", class_="nn")
             source = source_tag.text.strip("()") if source_tag else ""
 
-            # Handle "Today" case
+            # Handling "Today" case as my data has Today instead of date
             if "Today" in timestamp_raw:
                 time_part = timestamp_raw.replace("Today", "").strip()
                 current_date = today_finviz
-            elif "-" in timestamp_raw:  # e.g., Jun-21-25 07:19AM
+            elif "-" in timestamp_raw: 
                 parts = timestamp_raw.split(" ")
                 current_date = parts[0]
                 time_part = parts[1] if len(parts) > 1 else ""
@@ -83,7 +83,7 @@ def main():
             article = ""
 
         article_texts.append(article)
-        time.sleep(1)  # polite crawling
+        time.sleep(1)  
 
     df['stock'] = 'nvidia'
     df['article_text'] = article_texts
@@ -110,11 +110,13 @@ def main():
     try:
         existing_df = pd.read_excel(file_path)
         updated_df = pd.concat([existing_df, df], ignore_index=True)
+        
     except FileNotFoundError:
         updated_df = df
-
-    updated_df.to_excel(file_path, index=False)
+        clean_df = updated_df.drop_duplicates(keep = "first")
+    clean_df.to_excel(file_path, index=False)
 
 
 if __name__ == "__main__":
     main()
+
