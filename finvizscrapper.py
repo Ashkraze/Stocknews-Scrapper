@@ -110,6 +110,8 @@ def main():
     try:
         existing_df = pd.read_excel(file_path)
         updated_df = pd.concat([existing_df, df], ignore_index=True)
+        clean_df = updated_df.drop_duplicates(keep = "first")
+        clean_df.to_excel(file_path, index=False)
         
     except FileNotFoundError:
         updated_df = df
@@ -119,5 +121,6 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
