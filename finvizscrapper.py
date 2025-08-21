@@ -114,9 +114,10 @@ def main():
     except FileNotFoundError:
         updated_df = df
         clean_df = updated_df.drop_duplicates(keep = "first")
-    clean_df.to_excel(file_path, index=False)
+        clean_df.to_excel(file_path, index=False)
 
 
 if __name__ == "__main__":
     main()
+
 
