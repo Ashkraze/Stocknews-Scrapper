@@ -1,0 +1,33 @@
+name: Stock Price Scraper
+
+on:
+  schedule:
+    - cron: "0 0 * * *"   # Runs every day at 00:00 UTC
+  workflow_dispatch:       # Allows you to run manually from GitHub Actions tab
+
+jobs:
+  run-scraper:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run stock price scraper
+        run: python stock_price_scrapper.py
+
+      - name: Commit and push changes
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git add stock_prices.xlsx
+          git commit -m "Update stock prices [skip ci]" || echo "No changes to commit"
+          git push
