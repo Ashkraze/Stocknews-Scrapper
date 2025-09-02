@@ -5,6 +5,9 @@ on:
     - cron: "0 0 * * *"   # Runs every day at 00:00 UTC
   workflow_dispatch:       # Allows you to run manually from GitHub Actions tab
 
+permissions:
+  contents: write   # <-- allow pushing to repo
+
 jobs:
   run-scraper:
     runs-on: ubuntu-latest
