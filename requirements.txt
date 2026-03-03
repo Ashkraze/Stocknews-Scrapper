@@ -1,8 +1,10 @@
 trafilatura
 transformers
+torch
 requests
 beautifulsoup4
 pandas
 openpyxl
 yfinance
 pandas_market_calendars
+numpy
