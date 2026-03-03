@@ -6,6 +6,44 @@ import time
 import re
 import html
 from datetime import datetime
+import numpy as np
+import torch
+from transformers import AutoTokenizer, AutoModelForSequenceClassification
+
+
+# ---------- Load FinBERT Model (Loads Once) ----------
+MODEL_NAME = "ProsusAI/finbert"
+tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)
+model = AutoModelForSequenceClassification.from_pretrained(MODEL_NAME)
+
+
+def get_sentiment_score(text):
+    """
+    Returns continuous sentiment score between -1 and 1
+    Score = P(positive) - P(negative)
+    """
+    if not text or text.strip() == "":
+        return np.nan
+
+    # Truncate for speed
+    text = text[:800]
+
+    inputs = tokenizer(
+        text,
+        return_tensors="pt",
+        truncation=True,
+        max_length=512
+    )
+
+    with torch.no_grad():
+        outputs = model(**inputs)
+        probs = torch.nn.functional.softmax(outputs.logits, dim=1)
+
+    probs = probs.numpy()[0]
+    negative, neutral, positive = probs
+
+    score = float(positive - negative)
+    return round(score, 4)
 
 
 def main():
@@ -40,28 +78,28 @@ def main():
             source_tag = cols[1].find("span", class_="nn")
             source = source_tag.text.strip("()") if source_tag else ""
 
-            # Handling "Today" case as my data has Today instead of date
+            # Handle date parsing
             if "Today" in timestamp_raw:
                 time_part = timestamp_raw.replace("Today", "").strip()
                 current_date = today_finviz
-            elif "-" in timestamp_raw: 
+            elif "-" in timestamp_raw:
                 parts = timestamp_raw.split(" ")
                 current_date = parts[0]
                 time_part = parts[1] if len(parts) > 1 else ""
-            else:  # Just time
+            else:
                 time_part = timestamp_raw
 
-            # Combine date and time into full timestamp
             if current_date and time_part:
                 try:
                     dt_obj = datetime.strptime(f"{current_date} {time_part}", "%b-%d-%y %I:%M%p")
                     full_timestamp = dt_obj.strftime("%Y-%m-%d %I:%M%p")
                 except Exception:
-                    full_timestamp = f"{current_date} {time_part}"  # fallback
+                    full_timestamp = f"{current_date} {time_part}"
             else:
                 full_timestamp = timestamp_raw
 
             news.append([full_timestamp, headline, source, link])
+
         except Exception as e:
             print("Error parsing row:", e)
 
@@ -69,21 +107,21 @@ def main():
     df['timestamp'] = pd.to_datetime(df['timestamp'], errors='coerce')
     df['date'] = df['timestamp'].dt.date
 
-    # ---------- Fetch full articles ----------
+    # ---------- Fetch Full Articles ----------
     article_texts = []
-    for url in df['url']:
+    for article_url in df['url']:
         try:
-            downloaded = trafilatura.fetch_url(url)
+            downloaded = trafilatura.fetch_url(article_url)
             if downloaded:
                 article = trafilatura.extract(downloaded)
             else:
                 article = ""
         except Exception as e:
-            print(f"Error fetching {url}: {e}")
+            print(f"Error fetching {article_url}: {e}")
             article = ""
 
         article_texts.append(article)
-        time.sleep(1)  
+        time.sleep(1)
 
     df['stock'] = 'nvidia'
     df['article_text'] = article_texts
@@ -93,34 +131,50 @@ def main():
         if pd.isna(text) or text.strip() == "":
             return ""
 
-        text = html.unescape(text)  # Unescape HTML
-        text = re.sub(r'[|]+', ' ', text)  # Pipes
-        text = re.sub(r'<.*?>', ' ', text)  # HTML tags
-        text = re.sub(r'http\S+|www\.\S+', ' ', text)  # URLs
-        text = text.encode('ascii', 'ignore').decode('ascii')  # Non-ascii
+        text = html.unescape(text)
+        text = re.sub(r'[|]+', ' ', text)
+        text = re.sub(r'<.*?>', ' ', text)
+        text = re.sub(r'http\S+|www\.\S+', ' ', text)
+        text = text.encode('ascii', 'ignore').decode('ascii')
         text = text.replace('“', '"').replace('”', '"').replace("’", "'").replace('–', '-').replace('—', '-')
-        text = re.sub(r'[\*\•\·\▪\◆\▶\-]', ' ', text)  # Bullets
-        text = re.sub(r'\s+', ' ', text)  # Extra whitespace
+        text = re.sub(r'[\*\•\·\▪\◆\▶\-]', ' ', text)
+        text = re.sub(r'\s+', ' ', text)
         return text.strip()
 
     df['article_text_clean'] = df['article_text'].apply(clean_article_text)
 
-    # ---------- Save to Excel ----------
+    # ---------- Save + Deduplicate ----------
     file_path = "finviz_data.xlsx"
+
     try:
         existing_df = pd.read_excel(file_path)
         updated_df = pd.concat([existing_df, df], ignore_index=True)
-        clean_df = updated_df.drop_duplicates(subset = ["headline"],keep = "first")
-        clean_df.to_excel(file_path, index=False)
-        
+        clean_df = updated_df.drop_duplicates(subset=["headline"], keep="first")
+
     except FileNotFoundError:
-        
-        df.to_excel(file_path, index=False)
+        clean_df = df
+
+    # ---------- Sentiment Column ----------
+    if 'sentiment_score' not in clean_df.columns:
+        clean_df['sentiment_score'] = np.nan
+
+    mask = (
+        clean_df['article_text_clean'].notna() &
+        (clean_df['article_text_clean'] != "") &
+        clean_df['sentiment_score'].isna()
+    )
+
+    print(f"Calculating sentiment for {mask.sum()} new articles...")
+
+    clean_df.loc[mask, 'sentiment_score'] = (
+        clean_df.loc[mask, 'article_text_clean']
+        .apply(get_sentiment_score)
+    )
+
+    clean_df.to_excel(file_path, index=False)
+
+    print("Excel file updated successfully.")
 
 
 if __name__ == "__main__":
     main()
-
-
-
-
